@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OPL Pixel-Prime Interface</title>
+<style>
+  :root{
+    --bg:        #0a0a0a;
+    --text:      #ffffff;
+    --muted:     #b0b0b0;
+    --accent:    #00a8e1; /* Azul Prime Video */
+    --font-ui:   'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    background: #000;
+    color: var(--text);
+    font-family: var(--font-ui);
+    display:flex; flex-direction:column;
+    overflow:hidden;
+    position: relative;
+  }
+
+  /* Fondo dinámico (Imagen _BG.png) */
+  .bg-layer {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background-size: cover;
+    background-position: center;
+    z-index: -2;
+    transition: background-image 0.4s ease-in-out, opacity 0.4s ease;
+    opacity: 0;
+    background-color: #111; /* Fondo por si no hay imagen */
+  }
+  .bg-layer.visible {
+    opacity: 1;
+  }
+  
+  .bg-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(to right, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 45%, rgba(0,0,0,0.2) 100%);
+    z-index: -1;
+  }
+
+  /* ---------- FILTROS SUPERIORES ---------- */
+  .filters {
+    display: flex;
+    gap: 15px;
+    padding: 25px 40px 0 40px;
+    z-index: 10;
+  }
+  .filter-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: var(--muted);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .filter-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+  }
+  .filter-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+  }
+
+  /* ---------- LAYOUT PRINCIPAL ---------- */
+  main{
+    flex:1; display:flex;
+    padding: 10px 40px 40px 40px;
+    gap: 20px;
+    min-height: 0;
+    position: relative;
+  }
+
+  /* ---------- LISTA DE JUEGOS (IZQUIERDA) ---------- */
+  .game-list-container {
+    flex: 0 0 50%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+    padding-left: 10px;
+  }
+
+  .game-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 70vh;
+    overflow-y: auto;
+    scrollbar-width: none;
+    scroll-behavior: smooth;
+  }
+  .game-list::-webkit-scrollbar { display: none; }
+
+  .game-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 6px 12px;
+    font-size: 1.35rem;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+    white-space: nowrap;
+  }
+  .game-item:hover {
+    color: #fff;
+    background: rgba(255,255,255,0.05);
+  }
+  .game-item.selected {
+    color: var(--accent);
+    background: rgba(0, 168, 225, 0.12);
+    font-weight: 600;
+  }
+
+  /* Iconos de dispositivo */
+  .device-icon {
+    font-size: 1.1rem;
+    width: 24px;
+    text-align: center;
+    opacity: 0.6;
+    filter: grayscale(100%);
+  }
+  .game-item.selected .device-icon {
+    opacity: 1;
+    filter: grayscale(0%);
+  }
+
+  /* ---------- INFO / CARÁTULA (DERECHA) ---------- */
+  .game-info {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 40px;
+  }
+
+  .cover-box {
+    width: 260px;
+    aspect-ratio: 3/4;
+    background: #1a1a1a;
+    border-radius: 8px;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.15);
+    transition: transform 0.3s;
+  }
+  .cover-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .cover-box .placeholder {
+    color: #555;
+    font-size: 0.9rem;
+    text-align: center;
+    padding: 10px;
+  }
+</style>
+</head>
+<body>
+
+  <div class="bg-layer" id="bgLayer"></div>
+  <div class="bg-overlay"></div>
+
+  <!-- Filtros de Dispositivo -->
+  <div class="filters">
+    <button class="filter-btn active" data-filter="ALL">📁 Todos</button>
+    <button class="filter-btn" data-filter="HDD">💾 SSD / HDD</button>
+    <button class="filter-btn" data-filter="USB">💿 USB</button>
+  </div>
+
+  <main>
+    <div class="game-list-container">
+      <div class="game-list" id="gameList">
+        <!-- Se llena con JS -->
+      </div>
+    </div>
+
+    <div class="game-info">
+      <div class="cover-box" id="coverBox">
+        <span class="placeholder">Cargando carátula...</span>
+      </div>
+    </div>
+  </main>
+
+<script>
+  // --- DATOS INTEGRADOS DE LOS CSV ---
+  const rawData = [
+    // DISCO DURO (HDD)
+    { title: "Worms 4 Mayhem", id: "SLES_530.96", device: "HDD" },
+    { title: "OcarinaOfTime", id: "ECLP_000.01", device: "HDD" },
+    { title: "The King of Fighters 2002", id: "SLES_533.81", device: "HDD" },
+    { title: "MICRO MACHINES", id: "SLES_508.20", device: "HDD" },
+    { title: "DreamWorks Shrek SuperSlam", id: "SLES_537.52", device: "HDD" },
+    { title: "TTA Defenders of the Universe", id: "SLUS_201.83", device: "HDD" },
+    { title: "Pac-Man Fever", id: "SLUS_201.97", device: "HDD" },
+    { title: "Bomberman Kart", id: "SLES_513.02", device: "HDD" },
+    { title: "Charlie Chocolate Factory", id: "SLES_533.86", device: "HDD" },
+    { title: "Everybodys Tennis", id: "SCES_545.35", device: "HDD" },
+    { title: "Hot Shots Golf Fore", id: "SCUS_974.01", device: "HDD" },
+    { title: "The Simpsons Skateboarding", id: "SLES_513.61", device: "HDD" },
+    { title: "Pro Evolution Soccer XITO 26", id: "SLES_556.76", device: "HDD" },
+    { title: "MLB Power Pros 2008", id: "SLUS_217.48", device: "HDD" },
+    { title: "METAL SLUG ANTHOLOGY", id: "SLUS_215.50", device: "HDD" },
+    { title: "Ratchet – Deadlocked", id: "SCUS_974.65", device: "HDD" },
+    { title: "Rayman M", id: "SLES_504.57", device: "HDD" },
+    { title: "Shrek Super Party", id: "SLES_514.62", device: "HDD" },
+    { title: "Sega Superstars Tennis", id: "SLUS_217.33", device: "HDD" },
+    { title: "THE SIMPSONS - HIT RUN", id: "SLUS_206.24", device: "HDD" },
+    { title: "THE ADVENTURES OF COOKIE CREAM", id: "SLUS_201.70", device: "HDD" },
+    { title: "THE SIMPSONS - ROAD RAGE", id: "SLES_506.28", device: "HDD" },
+    { title: "Tony Hawks Pro Skater 3", id: "SLUS_200.13", device: "HDD" },
+    { title: "Captain Tsubasa", id: "SLUS_219.91", device: "HDD" },
+    { title: "Ice Age 3", id: "SLES_554.87", device: "HDD" },
+    { title: "Jim Hensons Muppets Party Cruise", id: "SLUS_206.35", device: "HDD" },
+    { title: "DreamWorks Shrek Racing", id: "SLES_545.53", device: "HDD" },
+    { title: "MVSC2 ABYSS LATINO", id: "SLUS_204.86", device: "HDD" },
+    { title: "ShrekCarnival Craze PG", id: "SLES_554.60", device: "HDD" },
+    { title: "Taz Wanted", id: "SLUS_202.36", device: "HDD" },
+    { title: "FIFA 14", id: "SLUS_270.93", device: "HDD" },
+    { title: "SSX - On Tour", id: "SLES_535.52", device: "HDD" },
+    { title: "Super Mario 64 ESP", id: "SLUS_623.90", device: "HDD" },
+    { title: "Super Smash Bros", id: "SSMB_001.26", device: "HDD" },
+    { title: "SuperMarioKart64", id: "SLUS_999.99", device: "HDD" },
+    { title: "TOMB RAIDER ANNIVERSARY", id: "SLUS_215.55", device: "HDD" },
+    { title: "Mortal Kombat Deception", id: "SLES_527.06", device: "HDD" },
+    { title: "Street Hoops", id: "SLUS_202.99", device: "HDD" },
+    { title: "SILENT HILL 4 - THE ROOM", id: "SLUS_208.73", device: "HDD" },
+    { title: "SILENT HILL 3", id: "SLES_514.34", device: "HDD" },
+    { title: "Chicken Little As en Action", id: "SLES_544.52", device: "HDD" },
+    { title: "Monster House", id: "SLES_542.15", device: "HDD" },
+    { title: "NFS Underground", id: "SLUS_208.11", device: "HDD" },
+    { title: "Ratatouille", id: "SLES_547.47", device: "HDD" },
+    { title: "RE CVX REMASTERED", id: "SLUS_201.85", device: "HDD" },
+    { title: "Resident Evil 4", id: "SLES_537.02", device: "HDD" },
+    { title: "Silent Hill 2", id: "SLUS_202.28", device: "HDD" },
+    { title: "Stitch Experiment 626", id: "SCES_509.59", device: "HDD" },
+    { title: "Surfs Up", id: "SLES_545.83", device: "HDD" },
+    { title: "Wallace Gromit TCWR", id: "SLES_536.21", device: "HDD" },
+    { title: "Mario Collection", id: "SCPE_000.02", device: "HDD" },
+    { title: "FNAF", id: "SCPE_000.01", device: "HDD" },
+    
+    // USB
+    { title: "Crash Bandicoot Wrath of Cortex", id: "SLUS_202.38", device: "USB" },
+    { title: "Grand Theft Auto San Andreas", id: "SLES_525.41", device: "USB" },
+    { title: "Kingdom Hearts II", id: "SLES_542.35", device: "USB" },
+    { title: "Spyro - A New Beginning", id: "SLES_543.59", device: "USB" },
+    { title: "Spyro - The Eternal Night", id: "SLES_548.15", device: "USB" },
+    { title: "Crash Nitro Kart", id: "SLES_515.11", device: "USB" },
+    { title: "Burnout 3 Takedown", id: "SLUS_210.50", device: "USB" },
+    { title: "Kingdom Hearts", id: "SCES_509.71", device: "USB" },
+    { title: "Spyro - Dawn of the Dragon", id: "SLES_551.63", device: "USB" },
+    { title: "CRASH OF THE TITANS", id: "SLES_548.41", device: "USB" },
+    { title: "Avatar - Into the Inferno", id: "SLUS_218.04", device: "USB" },
+    { title: "Crash Twinsanity", id: "SLUS_209.09", device: "USB" },
+    { title: "Avatar - The Burning Earth", id: "SLUS_215.88", device: "USB" },
+    { title: "Avatar - The Last Airbender", id: "SLUS_213.95", device: "USB" },
+    { title: "DIGIMON RUMBLE ARENA 2", id: "SLES_526.31", device: "USB" },
+    { title: "Bloody Roar 4", id: "SLUS_207.95", device: "USB" },
+    { title: "God of War II", id: "SCUS_974.81", device: "USB" },
+    { title: "DBZBT4B14REV2", id: "SLUS_219.78", device: "USB" },
+    { title: "FIFA STREET 2 ALLUNLOCKED ESP", id: "SLUS_213.69", device: "USB" },
+    { title: "Crash Tag Team Racing", id: "SLES_534.39", device: "USB" },
+    { title: "DEF JAM - FIGHT FOR NY", id: "SLUS_210.04", device: "USB" },
+    { title: "God of War", id: "SCUS_973.99", device: "USB" },
+    { title: "Godzilla Save the Earth", id: "SLES_527.66", device: "USB" },
+    { title: "GRAND THEFT AUTO III", id: "SLUS_200.62", device: "USB" },
+    { title: "Looney Tunes Acme Arsenal", id: "SLES_549.31", device: "USB" },
+    { title: "SONIC UNLEASHED", id: "SLUS_218.46", device: "USB" },
+    { title: "Grand Theft Auto Vice City", id: "SLUS_205.52", device: "USB" },
+    { title: "Looney Tunes Space Race", id: "SLUS_203.52", device: "USB" },
+    { title: "Harry Potter Quidditch World Cup", id: "SLUS_207.69", device: "USB" },
+    { title: "Toy Story 3", id: "SLUS_219.31", device: "USB" },
+    { title: "HP 5 the Order of the Phoenix", id: "SLES_547.79", device: "USB" },
+    { title: "HP 6 and The HalfBlood Prince", id: "SLUS_218.08", device: "USB" },
+    { title: "HP 3 Prisoner of Azkaban", id: "SLES_524.40", device: "USB" },
+    { title: "HP 4 the Goblet of Fire", id: "SLES_537.28", device: "USB" },
+    { title: "HP 1 the Sorcerers Stone", id: "SLUS_208.26", device: "USB" },
+    { title: "HP 2 and The Chamber of Secrets", id: "SLES_511.95", device: "USB" }
+  ];
+
+  const gameListEl = document.getElementById('gameList');
+  const coverBoxEl = document.getElementById('coverBox');
+  const bgLayerEl = document.getElementById('bgLayer');
+  
+  let currentFilter = 'ALL';
+  let selectedIndex = 0;
+  let filteredGames = [];
+
+  const IMG_PATH = "ART/"; 
+
+  function getCoverUrl(id) { return `${IMG_PATH}${id}_COV.png`; }
+  function getBgUrl(id) { return `${IMG_PATH}${id}_BG.png`; }
+
+  function updateList() {
+    // Filtrar y ordenar
+    filteredGames = rawData
+      .filter(g => currentFilter === 'ALL' || g.device === currentFilter)
+      .sort((a, b) => a.title.localeCompare(b.title));
+
+    selectedIndex = 0; // Resetear al primer elemento al cambiar filtro
+    render();
+  }
+
+  function render() {
+    if (filteredGames.length === 0) {
+      gameListEl.innerHTML = '<div class="game-item">No hay juegos en este dispositivo.</div>';
+      coverBoxEl.innerHTML = '<span class="placeholder">Sin juego</span>';
+      bgLayerEl.classList.remove('visible');
+      return;
+    }
+
+    // Renderizar lista
+    gameListEl.innerHTML = filteredGames.map((g, i) => {
+      const deviceIcon = g.device === 'HDD' ? '💾' : '💿';
+      return `
+        <div class="game-item ${i === selectedIndex ? 'selected' : ''}" data-index="${i}">
+          <span class="device-icon">${deviceIcon}</span>
+          <span>${g.title}</span>
+        </div>
+      `;
+    }).join('');
+
+    const game = filteredGames[selectedIndex];
+    const coverUrl = getCoverUrl(game.id);
+    const bgUrl = getBgUrl(game.id);
+
+    // Actualizar carátula
+    coverBoxEl.innerHTML = `
+      <img src="${coverUrl}" alt="${game.title}" 
+           onerror="this.parentElement.innerHTML='<span class=\\'placeholder\\'>Sin carátula<br>${game.id}</span>'">
+    `;
+
+    // Actualizar fondo
+    const tempBg = new Image();
+    tempBg.src = bgUrl;
+    tempBg.onload = () => {
+      bgLayerEl.style.backgroundImage = `url('${bgUrl}')`;
+      bgLayerEl.classList.add('visible');
+    };
+    tempBg.onerror = () => {
+      // Si no hay fondo (ID_BG.png), usar un gradiente oscuro o la carátula desenfocada
+      bgLayerEl.style.backgroundImage = `url('${coverUrl}')`;
+      bgLayerEl.classList.add('visible');
+    };
+
+    // Listeners de clic
+    document.querySelectorAll('.game-item').forEach(el => {
+      el.onclick = () => {
+        selectedIndex = parseInt(el.dataset.index);
+        render();
+      };
+    });
+
+    // Auto-scroll
+    const selectedEl = document.querySelector('.game-item.selected');
+    if (selectedEl) {
+      selectedEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+
+  // Lógica de los botones de filtro
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      updateList();
+    };
+  });
+
+  // Navegación con teclado
+  document.addEventListener('keydown', (e) => {
+    if (filteredGames.length === 0) return;
+    
+    if (e.key === 'ArrowDown') {
+      selectedIndex = Math.min(selectedIndex + 1, filteredGames.length - 1);
+      render();
+      e.preventDefault();
+    }
+    if (e.key === 'ArrowUp') {
+      selectedIndex = Math.max(selectedIndex - 1, 0);
+      render();
+      e.preventDefault();
+    }
+  });
+
+  // Iniciar
+  updateList();
+</script>
+</body>
+</html>
